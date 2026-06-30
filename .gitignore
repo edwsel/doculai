@@ -1,0 +1,40 @@
+# Binaries
+/doculai
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test/build artifacts
+*.test
+*.out
+coverage.txt
+coverage.html
+*.prof
+
+# Go workspace
+go.work
+go.work.sum
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / editors
+.idea/
+.vscode/
+.kilo/
+.serena/
+*.swp
+*.swo
+*~
+
+# Vendor (optional — раскомментируйте если используете vendoring)
+# vendor/
