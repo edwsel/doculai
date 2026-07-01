@@ -12,8 +12,8 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
-	"doculai/internal/image"
-	"doculai/internal/vllm"
+	"github.com/edwsel/doculai/internal/image"
+	"github.com/edwsel/doculai/internal/vllm"
 )
 
 // fastBackoffFactory builds an immediate-retry, context-aware backoff (capped at

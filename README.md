@@ -36,6 +36,11 @@ Markdown from heterogeneous input formats.
   alignment.
 - 🖼️ **PDF (scanned) → Markdown** — page rendering with `go-pdfium` (WASM via
   `wazero`) plus optional OCR through any VLLM endpoint.
+- 📷 **Images → Markdown** — standalone PNG, JPEG, GIF, WEBP, and BMP files
+  are OCR'd straight to Markdown via a VLLM.
+- 📁 **Directory batch** — point `-i` at a directory to convert every
+  recognized file recursively (HTML / PDF / image), merged into one document
+  with `## File: <relpath>` section headers.
 - ⚡ **Parallel OCR with retry** — concurrent page processing with bounded
   concurrency, exponential backoff retries, and ordered output.
 - 🔌 **Provider agnostic** — works with OpenAI, OpenAI-compatible gateways,
@@ -129,7 +134,7 @@ cat input.html | doculai -t html > output.md
 ### From source
 
 ```bash
-git clone https://github.com/yourusername/doculai.git
+git clone https://github.com/edwsel/doculai.git
 cd doculai
 go build -o doculai ./cmd/doculai
 ```
@@ -137,7 +142,7 @@ go build -o doculai ./cmd/doculai
 ### As a Go dependency
 
 ```bash
-go get doculai
+go get github.com/edwsel/doculai
 ```
 
 > **Note:** PDF support uses [`go-pdfium`](https://github.com/klippa-app/go-pdfium),
@@ -163,9 +168,9 @@ Examples:
 
 | Flag                              | Default   | Description                                                                 |
 | --------------------------------- | --------- | --------------------------------------------------------------------------- |
-| `-i, --input`                     | _stdin_   | Input file. Reads from stdin if omitted.                                    |
+| `-i, --input`                     | _stdin_   | Input file **or directory**. A directory is walked recursively. Reads from stdin if omitted. |
 | `-o, --output`                    | _stdout_  | Output file. Writes to stdout if omitted.                                   |
-| `-t, --type`                      | `auto`    | Input type: `auto`, `html`, `pdf`. stdin requires an explicit type.         |
+| `-t, --type`                      | `auto`    | Input type: `auto`, `html`, `pdf`, `image`. stdin requires an explicit type. `image` sniffs the subtype from content. |
 | `--vllm-model`                    | —         | VLLM model name (e.g. `gpt-4o`, `llava`).                                   |
 | `--vllm-url`                      | —         | VLLM API URL (e.g. `https://api.openai.com/v1`).                            |
 | `--vllm-key`                      | —         | VLLM API key.                                                               |
@@ -216,6 +221,16 @@ doculai -i scan.pdf -o output.md \
   --vllm-model gpt-4o --vllm-provider openai \
   --vllm-url https://api.openai.com/v1 --vllm-key "$OPENAI_API_KEY" \
   --vllm-concurrency 2
+
+# Image → Markdown (standalone PNG/JPEG/GIF/WEBP/BMP via OCR)
+doculai -i photo.png -o output.md \
+  --vllm-model gpt-4o --vllm-provider openai \
+  --vllm-url https://api.openai.com/v1 --vllm-key "$OPENAI_API_KEY"
+
+# Directory batch — recursive, sorted, merged with "## File: <relpath>" headers
+doculai -i docs/ -o output.md \
+  --vllm-model gpt-4o --vllm-provider openai \
+  --vllm-url https://api.openai.com/v1 --vllm-key "$OPENAI_API_KEY" -v
 ```
 
 ## Go API
@@ -231,7 +246,7 @@ package main
 import (
     "os"
 
-    "doculai/pkg/doculai"
+    "github.com/edwsel/doculai/pkg/doculai"
 )
 
 func main() {
@@ -380,6 +395,8 @@ When no VLLM is configured:
 
 - **Text PDFs** — full conversion with structure detection.
 - **Image PDFs** — page metadata plus `[Image: page N]` placeholders.
+- **Standalone images** — no fallback: OCR is the only extraction path, so the
+  conversion (and the CLI) exits with an error.
 
 ## Environment variables
 
@@ -398,7 +415,8 @@ doculai/
 │   │   ├── converter.go    # Converter interface + factory
 │   │   ├── html.go         # HTML → Markdown
 │   │   ├── pdf_text.go     # PDF (text) → Markdown
-│   │   └── pdf_image.go    # PDF (images) → Markdown via VLLM
+│   │   ├── pdf_image.go    # PDF (images) → Markdown via VLLM
+│   │   └── image.go        # Image → Markdown via VLLM OCR
 │   ├── pdf/
 │   │   ├── extractor.go    # Extract text/images from PDF
 │   │   └── inspector.go    # Detect whether a PDF has a text layer
@@ -422,19 +440,23 @@ doculai/
 ### Data flow
 
 ```
-Input file
-   │
-   ▼
-Detect type (HTML / PDF)
-   │
-   ├── HTML ───────────────────────► html-to-markdown ─► Markdown
-   │
-   └── PDF ──► Inspect text layer
-                 │
-                 ├── Has text ─► Extract text + structure ─► Markdown
-                 │                  (headings, lists, tables)
-                 │
-                 └── No text ──► Render pages ─► Normalize ─► VLLM OCR ─► Markdown
+Input file or directory (-i)
+    │   (directory → recursive walk, sorted; merged with "## File: <relpath>"
+    │    sections joined by horizontal rules; unrecognized files are skipped)
+    │
+    ▼
+Detect type (HTML / PDF / image)
+    │
+    ├── HTML ───────────────────────► html-to-markdown ─► Markdown
+    │
+    ├── Image ─► Normalize ─► VLLM OCR ─► Markdown (no VLLM → error)
+    │
+    └── PDF ──► Inspect text layer
+                  │
+                  ├── Has text ─► Extract text + structure ─► Markdown
+                  │                  (headings, lists, tables)
+                  │
+                  └── No text ──► Render pages ─► Normalize ─► VLLM OCR ─► Markdown
 ```
 
 ### PDF structure detection
@@ -470,7 +492,7 @@ go test ./internal/converter/...
 ### Mock VLLM server
 
 ```go
-import "doculai/test/mock"
+import "github.com/edwsel/doculai/test/mock"
 
 server := mock.MockVLLMServer()
 defer server.Close()
@@ -514,4 +536,4 @@ defer server.Close()
 
 ## License
 
-MIT.
+Apache-2.0. See [LICENSE.md](LICENSE.md).

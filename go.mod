@@ -1,4 +1,4 @@
-module doculai
+module github.com/edwsel/doculai
 
 go 1.26
 
@@ -10,7 +10,6 @@ require (
 	github.com/urfave/cli/v3 v3.10.1
 	golang.org/x/image v0.43.0
 	golang.org/x/sync v0.21.0
-	golang.org/x/text v0.38.0
 )
 
 require (
@@ -20,4 +19,5 @@ require (
 	github.com/tetratelabs/wazero v1.12.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 )

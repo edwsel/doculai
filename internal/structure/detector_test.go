@@ -3,7 +3,7 @@ package structure
 import (
 	"testing"
 
-	"doculai/internal/pdf"
+	"github.com/edwsel/doculai/internal/pdf"
 )
 
 func TestDetector_sortElements(t *testing.T) {

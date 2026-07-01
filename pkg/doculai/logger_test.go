@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"doculai/internal/converter"
+	"github.com/edwsel/doculai/internal/converter"
 )
 
 func TestNew_WithLoggerInjectsIntoConvert(t *testing.T) {

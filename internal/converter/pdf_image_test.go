@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"doculai/internal/pdf"
+	"github.com/edwsel/doculai/internal/pdf"
 )
 
 func TestPDFImageConverter_Convert(t *testing.T) {

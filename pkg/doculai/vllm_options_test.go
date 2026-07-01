@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"doculai/internal/converter"
+	"github.com/edwsel/doculai/internal/converter"
 )
 
 func TestWithVLLMServer_StoresURL(t *testing.T) {

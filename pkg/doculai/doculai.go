@@ -5,7 +5,7 @@ import (
 	"io"
 	"log/slog"
 
-	"doculai/internal/converter"
+	"github.com/edwsel/doculai/internal/converter"
 )
 
 // discardLogger is the silent default logger used when none is provided.
@@ -101,6 +101,7 @@ func New(opts ...Option) *Doculai {
 	factory := converter.NewFactory()
 	factory.Register(converter.NewHTMLConverter())
 	factory.Register(converter.NewPDFConverter())
+	factory.Register(converter.NewImageConverter())
 
 	return &Doculai{
 		factory:         factory,

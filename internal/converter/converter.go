@@ -4,6 +4,8 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+
+	"github.com/edwsel/doculai/internal/image"
 )
 
 // discardLogger is the silent default logger used when none is provided.
@@ -24,14 +26,14 @@ type Converter interface {
 
 // Options holds configuration for the conversion process.
 type Options struct {
-	VLLMModel        string // Модель VLLM (опционально)
-	VLLMURL          string // URL VLLM провайдера (опционально)
-	VLLMKey          string // API ключ (опционально)
-	VLLMProvider     string // "openai" или "ollama"
-	VLLMPrompt       string // Пользовательский системный промпт (опционально, переопределяет базовый)
-	VLLMReasoning    bool   // Включить reasoning для моделей с поддержкой (по умолчанию отключён)
-	VLLMConcurrency  int    // Параллельные запросы OCR (<=0 → дефолт, см. DefaultVLLMConcurrency)
-	Logger           *slog.Logger
+	VLLMModel       string // Модель VLLM (опционально)
+	VLLMURL         string // URL VLLM провайдера (опционально)
+	VLLMKey         string // API ключ (опционально)
+	VLLMProvider    string // "openai" или "ollama"
+	VLLMPrompt      string // Пользовательский системный промпт (опционально, переопределяет базовый)
+	VLLMReasoning   bool   // Включить reasoning для моделей с поддержкой (по умолчанию отключён)
+	VLLMConcurrency int    // Параллельные запросы OCR (<=0 → дефолт, см. DefaultVLLMConcurrency)
+	Logger          *slog.Logger
 }
 
 // logger returns the configured logger, or a silent discard logger if none is set.
@@ -84,6 +86,11 @@ func DetectMimeType(data []byte) string {
 	// PDF detection (PDF files start with %PDF)
 	if len(data) >= 4 && string(data[:4]) == "%PDF" {
 		return "application/pdf"
+	}
+
+	// Image detection via magic numbers (PNG, JPEG, GIF, WEBP, BMP, ICO).
+	if mt := image.DetectMIMEType(data); mt != "application/octet-stream" {
+		return mt
 	}
 
 	return "application/octet-stream"

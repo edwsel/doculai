@@ -3,8 +3,8 @@ package converter
 import (
 	"io"
 
-	"doculai/internal/pdf"
-	"doculai/internal/structure"
+	"github.com/edwsel/doculai/internal/pdf"
+	"github.com/edwsel/doculai/internal/structure"
 )
 
 // PDFTextConverter converts PDF with text to Markdown.

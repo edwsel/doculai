@@ -12,9 +12,9 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/errgroup"
 
-	"doculai/internal/image"
-	"doculai/internal/pdf"
-	"doculai/internal/vllm"
+	"github.com/edwsel/doculai/internal/image"
+	"github.com/edwsel/doculai/internal/pdf"
+	"github.com/edwsel/doculai/internal/vllm"
 )
 
 // ocrMaxRetries caps the number of retries after the initial attempt for a

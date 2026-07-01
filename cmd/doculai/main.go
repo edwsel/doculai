@@ -1,19 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/urfave/cli/v3"
 
-	"doculai/internal/converter"
-	"doculai/internal/pdf"
-	"doculai/pkg/doculai"
+	"github.com/edwsel/doculai/internal/converter"
+	"github.com/edwsel/doculai/internal/pdf"
+	"github.com/edwsel/doculai/pkg/doculai"
 )
 
 const longDescription = `Convert HTML or PDF files to Markdown.
@@ -79,7 +82,7 @@ func main() {
 				Aliases:     []string{"t"},
 				Value:       "auto",
 				Destination: &inputType,
-				Usage:       "Input type: auto, html, pdf",
+				Usage:       "Input type: auto, html, pdf, image",
 			},
 			&cli.StringFlag{
 				Name:        "vllm-model",
@@ -167,42 +170,6 @@ func main() {
 			level := levelFromVerbosity(quiet, vCount)
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 
-			// Determine input source
-			var input io.Reader
-			var mimeType string
-
-			if inputFile != "" {
-				f, err := os.Open(inputFile)
-				if err != nil {
-					logger.Error("opening input file", "err", err)
-					return cli.Exit("", 1)
-				}
-				defer f.Close()
-				input = f
-
-				// Detect MIME type from file extension if auto
-				if inputType == "auto" {
-					mimeType = detectMimeTypeFromFile(inputFile)
-				}
-			} else {
-				// Read from stdin
-				input = os.Stdin
-				if inputType == "auto" {
-					logger.Error("reading from stdin requires explicit input type with -t")
-					return cli.Exit("", 1)
-				}
-			}
-
-			// Determine MIME type from explicit flag
-			if inputType != "auto" {
-				mimeType = mimeTypeFromString(inputType)
-			}
-
-			if mimeType == "" {
-				logger.Error("unsupported input type", "type", inputType)
-				return cli.Exit("", 1)
-			}
-
 			// Create converter options (per-call values take priority over
 			// instance-level options; CLI flags always populate these).
 			opts := converter.Options{
@@ -227,33 +194,98 @@ func main() {
 				doculai.WithVLLMConcurrency(vllmConcurrency),
 			)
 
-			// Convert
-			var result string
-			var err error
-
-			if mimeType == "application/pdf" {
-				// For PDF, we need to check if it has text or is image-based
-				result, err = convertPDF(input, opts, imageDir)
-			} else {
-				result, err = d.ConvertWithType(input, mimeType, opts)
+			// Directory input: walk recursively and merge per-file sections.
+			if inputFile != "" {
+				info, err := os.Stat(inputFile)
+				if err != nil {
+					logger.Error("opening input file", "err", err)
+					return cli.Exit("", 1)
+				}
+				if info.IsDir() {
+					result, err := convertDirectory(inputFile, d, opts, logger, imageDir)
+					if err != nil {
+						logger.Error("converting directory", "err", err)
+						return cli.Exit("", 1)
+					}
+					return writeOutput(result, outputFile, logger)
+				}
 			}
 
+			// Determine input source.
+			var input io.Reader
+			var mimeType string
+
+			if inputFile != "" {
+				f, err := os.Open(inputFile)
+				if err != nil {
+					logger.Error("opening input file", "err", err)
+					return cli.Exit("", 1)
+				}
+				defer f.Close()
+				input = f
+
+				// Detect MIME type from file extension if auto.
+				if inputType == "auto" {
+					mimeType = detectMimeTypeFromFile(inputFile)
+				}
+			} else {
+				// Read from stdin
+				input = os.Stdin
+				if inputType == "auto" {
+					logger.Error("reading from stdin requires explicit input type with -t")
+					return cli.Exit("", 1)
+				}
+			}
+
+			// Determine MIME type from explicit flag.
+			if inputType != "auto" {
+				mimeType = mimeTypeFromString(inputType)
+			}
+
+			// "-t image" is a placeholder family; resolve the concrete subtype
+			// by sniffing the content magic numbers.
+			if mimeType == "image/*" {
+				data, err := io.ReadAll(input)
+				if err != nil {
+					logger.Error("reading input", "err", err)
+					return cli.Exit("", 1)
+				}
+				mimeType = converter.DetectMimeType(data)
+				if !strings.HasPrefix(mimeType, "image/") {
+					logger.Error("input is not a recognized image", "detected", mimeType)
+					return cli.Exit("", 1)
+				}
+				input = bytes.NewReader(data)
+			} else if mimeType == "" && inputFile != "" {
+				// Unknown extension in auto mode: sniff content magic numbers.
+				data, err := io.ReadAll(input)
+				if err != nil {
+					logger.Error("reading input", "err", err)
+					return cli.Exit("", 1)
+				}
+				mimeType = converter.DetectMimeType(data)
+				input = bytes.NewReader(data)
+			}
+
+			if mimeType == "" || mimeType == "application/octet-stream" {
+				logger.Error("unsupported input type", "type", inputType, "mime", mimeType)
+				return cli.Exit("", 1)
+			}
+
+			// Read the full input so converters can re-read as needed.
+			data, err := io.ReadAll(input)
+			if err != nil {
+				logger.Error("reading input", "err", err)
+				return cli.Exit("", 1)
+			}
+
+			result, err := convertOne(data, mimeType, opts, d, imageDir)
 			if err != nil {
 				logger.Error("converting", "err", err)
 				return cli.Exit("", 1)
 			}
 
-			// Write output
-			if outputFile != "" {
-				if err := os.WriteFile(outputFile, []byte(result), 0644); err != nil {
-					logger.Error("writing output file", "err", err)
-					return cli.Exit("", 1)
-				}
-				logger.Info("converted", "output", outputFile)
-			} else {
-				fmt.Print(result)
-			}
-			return nil
+			return writeOutput(result, outputFile, logger)
 		},
 	}
 
@@ -293,18 +325,32 @@ func detectMimeTypeFromFile(filename string) string {
 		return "text/html"
 	case ".pdf":
 		return "application/pdf"
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".bmp":
+		return "image/bmp"
 	default:
 		return ""
 	}
 }
 
-// mimeTypeFromString converts a string type to MIME type.
+// mimeTypeFromString converts a string type to MIME type. "image" maps to the
+// "image/*" family placeholder, which the caller resolves to a concrete subtype
+// by sniffing content magic numbers.
 func mimeTypeFromString(inputType string) string {
 	switch strings.ToLower(inputType) {
 	case "html":
 		return "text/html"
 	case "pdf":
 		return "application/pdf"
+	case "image":
+		return "image/*"
 	default:
 		return ""
 	}
@@ -337,4 +383,100 @@ func convertPDF(input io.Reader, opts converter.Options, imageDir string) (strin
 	// Use image converter (with or without VLLM)
 	imageConverter := converter.NewPDFImageConverter()
 	return imageConverter.Convert(strings.NewReader(string(data)), opts)
+}
+
+// convertOne dispatches a single file's already-read data to the appropriate
+// converter based on its MIME type. PDFs go through text/image routing; HTML
+// and images resolve through the factory via ConvertWithType.
+func convertOne(data []byte, mimeType string, opts converter.Options, d *doculai.Doculai, imageDir string) (string, error) {
+	if mimeType == "application/pdf" {
+		return convertPDF(bytes.NewReader(data), opts, imageDir)
+	}
+	return d.ConvertWithType(bytes.NewReader(data), mimeType, opts)
+}
+
+// convertDirectory walks dir recursively, converts every recognized file, and
+// merges the results into a single Markdown document. Files are processed
+// sequentially in sorted relative-path order. Per-file results are prefixed
+// with a "## File: <relpath>" header and joined with a horizontal rule.
+// Unrecognized files are silently skipped (DEBUG log only). On the first
+// conversion error the batch stops (fail-fast, matching OCR pipeline policy).
+func convertDirectory(dir string, d *doculai.Doculai, opts converter.Options, logger *slog.Logger, imageDir string) (string, error) {
+	logger.Info("batch directory", "dir", dir)
+
+	var paths []string
+	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("walking directory: %w", err)
+	}
+	sort.Strings(paths)
+
+	var sections []string
+	for _, path := range paths {
+		rel, relErr := filepath.Rel(dir, path)
+		if relErr != nil {
+			rel = path
+		}
+		rel = filepath.ToSlash(rel)
+
+		info, err := os.Stat(path)
+		if err != nil {
+			return "", fmt.Errorf("stat %s: %w", rel, err)
+		}
+		if info.Size() == 0 {
+			logger.Debug("batch skip empty", "file", rel)
+			continue
+		}
+
+		// Extension first; fall back to content sniffing for unknown extensions.
+		mimeType := detectMimeTypeFromFile(path)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("reading %s: %w", rel, err)
+		}
+		if mimeType == "" {
+			mimeType = converter.DetectMimeType(data)
+		}
+
+		if mimeType == "" || mimeType == "application/octet-stream" {
+			logger.Debug("batch skip unrecognized", "file", rel, "mime", mimeType)
+			continue
+		}
+
+		logger.Info("batch file", "file", rel, "mime", mimeType)
+
+		converted, err := convertOne(data, mimeType, opts, d, imageDir)
+		if err != nil {
+			return "", fmt.Errorf("converting %s: %w", rel, err)
+		}
+
+		sections = append(sections, fmt.Sprintf("## File: %s\n\n%s", rel, converted))
+	}
+
+	logger.Info("batch done", "files", len(sections))
+	return strings.Join(sections, "\n\n---\n\n"), nil
+}
+
+// writeOutput writes the conversion result to the output file (when given) or
+// to stdout, preserving clean stdout for piping.
+func writeOutput(result, outputFile string, logger *slog.Logger) error {
+	if outputFile != "" {
+		if err := os.WriteFile(outputFile, []byte(result), 0644); err != nil {
+			logger.Error("writing output file", "err", err)
+			return cli.Exit("", 1)
+		}
+		logger.Info("converted", "output", outputFile)
+		return nil
+	}
+	fmt.Print(result)
+	return nil
 }

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"doculai/internal/pdf"
+	"github.com/edwsel/doculai/internal/pdf"
 )
 
 // ElementType represents the type of structured element.

@@ -7,7 +7,12 @@ import (
 	"io"
 	"math"
 
+	_ "golang.org/x/image/bmp" // register BMP decoder for image.Decode
 	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp" // register WEBP decoder for image.Decode
+
+	_ "image/gif" // register GIF decoder for image.Decode
+	_ "image/png" // register PNG decoder for image.Decode
 )
 
 const (

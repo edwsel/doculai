@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"doculai/internal/converter"
-	"doculai/pkg/doculai"
+	"github.com/edwsel/doculai/internal/converter"
+	"github.com/edwsel/doculai/pkg/doculai"
 )
 
 func TestDoculai_ConvertHTML(t *testing.T) {

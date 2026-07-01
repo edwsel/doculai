@@ -14,7 +14,8 @@ doculai/
 │   │   ├── converter.go    # Интерфейс и фабрика
 │   │   ├── html.go         # HTML -> Markdown
 │   │   ├── pdf_text.go     # PDF (текст) -> Markdown
-│   │   └── pdf_image.go    # PDF (изображения) -> Markdown через VLLM
+│   │   ├── pdf_image.go    # PDF (изображения) -> Markdown через VLLM
+│   │   └── image.go        # Standalone image -> Markdown через VLLM
 │   ├── pdf/
 │   │   ├── extractor.go    # Извлечение текста/изображений из PDF
 │   │   └── inspector.go    # Проверка наличия текста в PDF
@@ -38,9 +39,16 @@ doculai/
 ### Поток данных
 
 ```
-Входной файл
+Входной файл (или директория)
     ↓
-Определение типа (HTML/PDF)
+-i <директория>? → WalkDir (отсортированно) → пофайлово:
+    │   расширение → если неизвестно, sniff контента (converter.DetectMimeType)
+    │   PDF → convertPDF (текст/изображение)
+    │   HTML / image → d.ConvertWithType (фабрика)
+    │   нераспознанное → молча пропустить (DEBUG)
+    │   объединение секций `## File: <relpath>` через `\n\n---\n\n`
+    ↓
+Определение типа (HTML/PDF/image)
     ↓
 ┌─────────────────┐
 │      HTML       │
@@ -66,6 +74,16 @@ doculai/
 │     lists,      │    │                 │
 │     tables)     │    │                 │
 └─────────────────┘    └─────────────────┘
+    ↓
+┌─────────────────┐
+│     Image       │
+│ (png/jpg/gif/   │
+│  webp/bmp)      │
+│  -> нет VLLM?   │  -> ERROR (OCR обязателен)
+│  -> Нормализовать│
+│  -> VLLM OCR    │
+│  -> Markdown    │
+└─────────────────┘
 ```
 
 ## Интерфейсы
@@ -248,7 +266,7 @@ doculai -i scan.pdf -o output.md -vvv --vllm-model gpt-4o ...
 import (
     "log/slog"
     "os"
-    "doculai/pkg/doculai"
+    "github.com/edwsel/doculai/pkg/doculai"
 )
 
 logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -296,7 +314,7 @@ test/
 ### Mock VLLM сервер
 
 ```go
-import "doculai/test/mock"
+import "github.com/edwsel/doculai/test/mock"
 
 server := mock.MockVLLMServer()
 defer server.Close()
@@ -313,7 +331,7 @@ package main
 
 import (
     "os"
-    "doculai/pkg/doculai"
+    "github.com/edwsel/doculai/pkg/doculai"
 )
 
 func main() {
@@ -361,8 +379,27 @@ doculai -i scan.pdf -o output.md \
   --vllm-provider openai \
   --vllm-concurrency 2
 
+# Изображение -> Markdown (PNG/JPEG/GIF/WEBP/BMP, через VLLM OCR)
+doculai -i photo.png -o output.md \
+  --vllm-model gpt-4o \
+  --vllm-url https://api.openai.com/v1 \
+  --vllm-key $OPENAI_KEY \
+  --vllm-provider openai
+
+# Директория -> Markdown (рекурсивный обход, отсортированно)
+# распознанные файлы (html/pdf/image) объединяются в один документ,
+# нераспознанные молча пропускаются; секции вида `## File: <relpath>`
+doculai -i docs/ -o output.md \
+  --vllm-model gpt-4o \
+  --vllm-url https://api.openai.com/v1 \
+  --vllm-key $OPENAI_KEY \
+  --vllm-provider openai -v
+
 # Чтение из stdin
 cat input.html | doculai -t html > output.md
+
+# Изображение из stdin (подтип определяется по сигнатуре контента)
+cat photo.png | doculai -t image --vllm-model gpt-4o ... > output.md
 ```
 
 ## Расширение
@@ -384,4 +421,4 @@ cat input.html | doculai -t html > output.md
 
 ## Лицензия
 
-MIT
+Apache-2.0 (см. `LICENSE.md`)
