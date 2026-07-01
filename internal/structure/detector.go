@@ -62,7 +62,7 @@ func (d *Detector) Detect(elements []pdf.TextElement) []StructuredElement {
 	avgFontSize := d.calculateAverageFontSize(sorted)
 
 	// Detect structure
-	var result []StructuredElement
+	result := make([]StructuredElement, 0, len(rows))
 	i := 0
 	for i < len(rows) {
 		row := rows[i]
@@ -206,7 +206,7 @@ func (d *Detector) detectHeading(row []pdf.TextElement, avgFontSize float64) *St
 }
 
 // detectList detects if rows form a list.
-func (d *Detector) detectList(rows [][]pdf.TextElement, startIndex int) (*StructuredElement, int) {
+func (d *Detector) detectList(rows [][]pdf.TextElement, startIndex int) (element *StructuredElement, next int) {
 	if startIndex >= len(rows) {
 		return nil, startIndex
 	}
@@ -281,7 +281,7 @@ func (d *Detector) detectList(rows [][]pdf.TextElement, startIndex int) (*Struct
 }
 
 // detectTable detects if rows form a table.
-func (d *Detector) detectTable(rows [][]pdf.TextElement, startIndex int) (*StructuredElement, int) {
+func (d *Detector) detectTable(rows [][]pdf.TextElement, startIndex int) (element *StructuredElement, next int) {
 	if startIndex >= len(rows) {
 		return nil, startIndex
 	}
@@ -298,7 +298,7 @@ func (d *Detector) detectTable(rows [][]pdf.TextElement, startIndex int) (*Struc
 	}
 
 	// Collect potential table rows
-	var tableRows [][]string
+	tableRows := make([][]string, 0, len(rows)-startIndex)
 	endIndex := startIndex
 
 	for i := startIndex; i < len(rows); i++ {
@@ -348,9 +348,9 @@ func (d *Detector) isTableRow(row []pdf.TextElement) bool {
 }
 
 // hasListMarker checks if text has a list marker.
-func (d *Detector) hasListMarker(text string) (bool, bool) {
+func (d *Detector) hasListMarker(text string) (ordered, marked bool) {
 	trimmed := strings.TrimSpace(text)
-	if len(trimmed) == 0 {
+	if trimmed == "" {
 		return false, false
 	}
 
@@ -438,7 +438,7 @@ func (d *Detector) getRowX(row []pdf.TextElement) float64 {
 
 // joinRowText joins text elements in a row.
 func (d *Detector) joinRowText(row []pdf.TextElement) string {
-	var parts []string
+	parts := make([]string, 0, len(row))
 	for _, elem := range row {
 		parts = append(parts, elem.Text)
 	}
@@ -515,15 +515,16 @@ func (f *Formatter) formatTable(table [][]string) string {
 
 	// Header row (first row)
 	if len(table) > 0 {
+		header := table[0]
 		sb.WriteString("| ")
-		for i, cell := range table[0] {
+		for i, cell := range header {
 			if i > 0 {
 				sb.WriteString(" | ")
 			}
 			sb.WriteString(cell)
 		}
 		// Pad empty cells
-		for i := len(table[0]); i < maxCols; i++ {
+		for i := len(header); i < maxCols; i++ {
 			sb.WriteString(" | ")
 		}
 		sb.WriteString(" |\n")

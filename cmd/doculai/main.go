@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -54,7 +55,6 @@ func main() {
 		vllmPrompt      string
 		withReasoning   bool
 		vllmConcurrency int
-		imageDir        string
 		quiet           bool
 		vCount          int
 	)
@@ -121,11 +121,6 @@ func main() {
 				Destination: &vllmConcurrency,
 				Usage:       "Max parallel VLLM page OCR requests",
 			},
-			&cli.StringFlag{
-				Name:        "image-dir",
-				Destination: &imageDir,
-				Usage:       "Directory for saving images",
-			},
 			&cli.BoolFlag{
 				Name:        "quiet",
 				Aliases:     []string{"q"},
@@ -151,7 +146,8 @@ func main() {
 				return
 			}
 			code := 1
-			if ec, ok := err.(cli.ExitCoder); ok {
+			var ec cli.ExitCoder
+			if errors.As(err, &ec) {
 				code = ec.ExitCode()
 			}
 			if msg := err.Error(); msg != "" {
@@ -160,132 +156,20 @@ func main() {
 			os.Exit(code)
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			// Resolve verbosity conflict: -q/--quiet wins over -v.
-			if quiet && vCount > 0 {
-				fmt.Fprintln(os.Stderr, "Warning: -v ignored because -q/--quiet is set")
-				vCount = 0
-			}
-
-			// Build the structured logger (text format to stderr only).
-			level := levelFromVerbosity(quiet, vCount)
-			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
-
-			// Create converter options (per-call values take priority over
-			// instance-level options; CLI flags always populate these).
-			opts := converter.Options{
-				VLLMModel:       vllmModel,
-				VLLMURL:         vllmURL,
-				VLLMKey:         vllmKey,
-				VLLMProvider:    vllmProvider,
-				VLLMPrompt:      vllmPrompt,
-				VLLMReasoning:   withReasoning,
-				VLLMConcurrency: vllmConcurrency,
-				Logger:          logger,
-			}
-
-			// Create doculai instance with VLLM server/model/key/provider at the
-			// instance level (acts as fallback for per-call Options).
-			d := doculai.New(
-				doculai.WithLogger(logger),
-				doculai.WithVLLMServer(vllmURL),
-				doculai.WithVLLMModel(vllmModel),
-				doculai.WithVLLMKey(vllmKey),
-				doculai.WithVLLMProvider(vllmProvider),
-				doculai.WithVLLMConcurrency(vllmConcurrency),
-			)
-
-			// Directory input: walk recursively and merge per-file sections.
-			if inputFile != "" {
-				info, err := os.Stat(inputFile)
-				if err != nil {
-					logger.Error("opening input file", "err", err)
-					return cli.Exit("", 1)
-				}
-				if info.IsDir() {
-					result, err := convertDirectory(inputFile, d, opts, logger, imageDir)
-					if err != nil {
-						logger.Error("converting directory", "err", err)
-						return cli.Exit("", 1)
-					}
-					return writeOutput(result, outputFile, logger)
-				}
-			}
-
-			// Determine input source.
-			var input io.Reader
-			var mimeType string
-
-			if inputFile != "" {
-				f, err := os.Open(inputFile)
-				if err != nil {
-					logger.Error("opening input file", "err", err)
-					return cli.Exit("", 1)
-				}
-				defer f.Close()
-				input = f
-
-				// Detect MIME type from file extension if auto.
-				if inputType == "auto" {
-					mimeType = detectMimeTypeFromFile(inputFile)
-				}
-			} else {
-				// Read from stdin
-				input = os.Stdin
-				if inputType == "auto" {
-					logger.Error("reading from stdin requires explicit input type with -t")
-					return cli.Exit("", 1)
-				}
-			}
-
-			// Determine MIME type from explicit flag.
-			if inputType != "auto" {
-				mimeType = mimeTypeFromString(inputType)
-			}
-
-			// "-t image" is a placeholder family; resolve the concrete subtype
-			// by sniffing the content magic numbers.
-			if mimeType == "image/*" {
-				data, err := io.ReadAll(input)
-				if err != nil {
-					logger.Error("reading input", "err", err)
-					return cli.Exit("", 1)
-				}
-				mimeType = converter.DetectMimeType(data)
-				if !strings.HasPrefix(mimeType, "image/") {
-					logger.Error("input is not a recognized image", "detected", mimeType)
-					return cli.Exit("", 1)
-				}
-				input = bytes.NewReader(data)
-			} else if mimeType == "" && inputFile != "" {
-				// Unknown extension in auto mode: sniff content magic numbers.
-				data, err := io.ReadAll(input)
-				if err != nil {
-					logger.Error("reading input", "err", err)
-					return cli.Exit("", 1)
-				}
-				mimeType = converter.DetectMimeType(data)
-				input = bytes.NewReader(data)
-			}
-
-			if mimeType == "" || mimeType == "application/octet-stream" {
-				logger.Error("unsupported input type", "type", inputType, "mime", mimeType)
-				return cli.Exit("", 1)
-			}
-
-			// Read the full input so converters can re-read as needed.
-			data, err := io.ReadAll(input)
-			if err != nil {
-				logger.Error("reading input", "err", err)
-				return cli.Exit("", 1)
-			}
-
-			result, err := convertOne(data, mimeType, opts, d, imageDir)
-			if err != nil {
-				logger.Error("converting", "err", err)
-				return cli.Exit("", 1)
-			}
-
-			return writeOutput(result, outputFile, logger)
+			return run(ctx, runConfig{
+				inputFile:       inputFile,
+				outputFile:      outputFile,
+				inputType:       inputType,
+				quiet:           quiet,
+				vCount:          vCount,
+				vllmModel:       vllmModel,
+				vllmURL:         vllmURL,
+				vllmKey:         vllmKey,
+				vllmProvider:    vllmProvider,
+				vllmPrompt:      vllmPrompt,
+				withReasoning:   withReasoning,
+				vllmConcurrency: vllmConcurrency,
+			})
 		},
 	}
 
@@ -293,6 +177,169 @@ func main() {
 		// ExitErrHandler above handles exit codes; this is a defensive backstop.
 		os.Exit(1)
 	}
+}
+
+type runConfig struct {
+	inputFile       string
+	outputFile      string
+	inputType       string
+	quiet           bool
+	vCount          int
+	vllmModel       string
+	vllmURL         string
+	vllmKey         string
+	vllmProvider    string
+	vllmPrompt      string
+	withReasoning   bool
+	vllmConcurrency int
+}
+
+func run(_ context.Context, cfg runConfig) error {
+	// Resolve verbosity conflict: -q/--quiet wins over -v.
+	if cfg.quiet && cfg.vCount > 0 {
+		fmt.Fprintln(os.Stderr, "Warning: -v ignored because -q/--quiet is set")
+		cfg.vCount = 0
+	}
+
+	// Build the structured logger (text format to stderr only).
+	level := levelFromVerbosity(cfg.quiet, cfg.vCount)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+
+	// Create converter options (per-call values take priority over
+	// instance-level options; CLI flags always populate these).
+	opts := converter.Options{
+		VLLMModel:       cfg.vllmModel,
+		VLLMURL:         cfg.vllmURL,
+		VLLMKey:         cfg.vllmKey,
+		VLLMProvider:    cfg.vllmProvider,
+		VLLMPrompt:      cfg.vllmPrompt,
+		VLLMReasoning:   cfg.withReasoning,
+		VLLMConcurrency: cfg.vllmConcurrency,
+		Logger:          logger,
+	}
+
+	// Create doculai instance with VLLM server/model/key/provider at the
+	// instance level (acts as fallback for per-call Options).
+	d := doculai.New(
+		doculai.WithLogger(logger),
+		doculai.WithVLLMServer(cfg.vllmURL),
+		doculai.WithVLLMModel(cfg.vllmModel),
+		doculai.WithVLLMKey(cfg.vllmKey),
+		doculai.WithVLLMProvider(cfg.vllmProvider),
+		doculai.WithVLLMConcurrency(cfg.vllmConcurrency),
+	)
+
+	// Directory input: walk recursively and merge per-file sections.
+	if cfg.inputFile != "" {
+		info, err := os.Stat(cfg.inputFile)
+		if err != nil {
+			logger.Error("opening input file", "err", err)
+			return cli.Exit("", 1)
+		}
+		if info.IsDir() {
+			result, err := convertDirectory(cfg.inputFile, d, opts, logger)
+			if err != nil {
+				logger.Error("converting directory", "err", err)
+				return cli.Exit("", 1)
+			}
+			return writeOutput(result, cfg.outputFile, logger)
+		}
+	}
+
+	// Determine input source.
+	var input io.Reader
+	var mimeType string
+
+	if cfg.inputFile != "" {
+		f, err := os.Open(cfg.inputFile)
+		if err != nil {
+			logger.Error("opening input file", "err", err)
+			return cli.Exit("", 1)
+		}
+		defer f.Close()
+		input = f
+
+		// Detect MIME type from file extension if auto.
+		if cfg.inputType == "auto" {
+			mimeType = detectMimeTypeFromFile(cfg.inputFile)
+		}
+	} else {
+		// Read from stdin
+		input = os.Stdin
+		if cfg.inputType == "auto" {
+			logger.Error("reading from stdin requires explicit input type with -t")
+			return cli.Exit("", 1)
+		}
+	}
+
+	// Determine MIME type from explicit flag.
+	if cfg.inputType != "auto" {
+		mimeType = mimeTypeFromString(cfg.inputType)
+	}
+
+	mimeType, input, err := resolveMimeAndInput(mimeType, input, cfg.inputType, cfg.inputFile, logger)
+	if err != nil {
+		return err
+	}
+
+	// Read the full input so converters can re-read as needed.
+	data, err := io.ReadAll(input)
+	if err != nil {
+		logger.Error("reading input", "err", err)
+		return cli.Exit("", 1)
+	}
+
+	result, err := convertOne(data, mimeType, opts, d)
+	if err != nil {
+		logger.Error("converting", "err", err)
+		return cli.Exit("", 1)
+	}
+
+	return writeOutput(result, cfg.outputFile, logger)
+}
+
+// resolveMimeAndInput handles magic-number sniffing for the "image/*" family
+// placeholder and for unknown extensions in auto mode. It returns the resolved
+// MIME type and a fresh reader positioned at the start of the content.
+func resolveMimeAndInput(
+	mimeType string,
+	input io.Reader,
+	inputType, inputFile string,
+	logger *slog.Logger,
+) (string, io.Reader, error) {
+	// "-t image" is a placeholder family; resolve the concrete subtype
+	// by sniffing the content magic numbers.
+	if mimeType == "image/*" {
+		data, err := io.ReadAll(input)
+		if err != nil {
+			logger.Error("reading input", "err", err)
+			return "", nil, cli.Exit("", 1)
+		}
+		mimeType = converter.DetectMimeType(data)
+		if !strings.HasPrefix(mimeType, "image/") {
+			logger.Error("input is not a recognized image", "detected", mimeType)
+			return "", nil, cli.Exit("", 1)
+		}
+		return mimeType, bytes.NewReader(data), nil
+	}
+
+	if mimeType == "" && inputFile != "" {
+		// Unknown extension in auto mode: sniff content magic numbers.
+		data, err := io.ReadAll(input)
+		if err != nil {
+			logger.Error("reading input", "err", err)
+			return "", nil, cli.Exit("", 1)
+		}
+		mimeType = converter.DetectMimeType(data)
+		return mimeType, bytes.NewReader(data), nil
+	}
+
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		logger.Error("unsupported input type", "type", inputType, "mime", mimeType)
+		return "", nil, cli.Exit("", 1)
+	}
+
+	return mimeType, input, nil
 }
 
 // levelFromVerbosity maps the CLI verbosity flags to an slog.Level.
@@ -357,7 +404,7 @@ func mimeTypeFromString(inputType string) string {
 }
 
 // convertPDF handles PDF conversion with text/image detection.
-func convertPDF(input io.Reader, opts converter.Options, imageDir string) (string, error) {
+func convertPDF(input io.Reader, opts converter.Options) (string, error) {
 	// Read all data to allow multiple passes
 	data, err := io.ReadAll(input)
 	if err != nil {
@@ -388,9 +435,9 @@ func convertPDF(input io.Reader, opts converter.Options, imageDir string) (strin
 // convertOne dispatches a single file's already-read data to the appropriate
 // converter based on its MIME type. PDFs go through text/image routing; HTML
 // and images resolve through the factory via ConvertWithType.
-func convertOne(data []byte, mimeType string, opts converter.Options, d *doculai.Doculai, imageDir string) (string, error) {
+func convertOne(data []byte, mimeType string, opts converter.Options, d *doculai.Doculai) (string, error) {
 	if mimeType == "application/pdf" {
-		return convertPDF(bytes.NewReader(data), opts, imageDir)
+		return convertPDF(bytes.NewReader(data), opts)
 	}
 	return d.ConvertWithType(bytes.NewReader(data), mimeType, opts)
 }
@@ -401,7 +448,7 @@ func convertOne(data []byte, mimeType string, opts converter.Options, d *doculai
 // with a "## File: <relpath>" header and joined with a horizontal rule.
 // Unrecognized files are silently skipped (DEBUG log only). On the first
 // conversion error the batch stops (fail-fast, matching OCR pipeline policy).
-func convertDirectory(dir string, d *doculai.Doculai, opts converter.Options, logger *slog.Logger, imageDir string) (string, error) {
+func convertDirectory(dir string, d *doculai.Doculai, opts converter.Options, logger *slog.Logger) (string, error) {
 	logger.Info("batch directory", "dir", dir)
 
 	var paths []string
@@ -420,7 +467,7 @@ func convertDirectory(dir string, d *doculai.Doculai, opts converter.Options, lo
 	}
 	sort.Strings(paths)
 
-	var sections []string
+	sections := make([]string, 0, len(paths))
 	for _, path := range paths {
 		rel, relErr := filepath.Rel(dir, path)
 		if relErr != nil {
@@ -454,7 +501,7 @@ func convertDirectory(dir string, d *doculai.Doculai, opts converter.Options, lo
 
 		logger.Info("batch file", "file", rel, "mime", mimeType)
 
-		converted, err := convertOne(data, mimeType, opts, d, imageDir)
+		converted, err := convertOne(data, mimeType, opts, d)
 		if err != nil {
 			return "", fmt.Errorf("converting %s: %w", rel, err)
 		}
@@ -470,7 +517,7 @@ func convertDirectory(dir string, d *doculai.Doculai, opts converter.Options, lo
 // to stdout, preserving clean stdout for piping.
 func writeOutput(result, outputFile string, logger *slog.Logger) error {
 	if outputFile != "" {
-		if err := os.WriteFile(outputFile, []byte(result), 0644); err != nil {
+		if err := os.WriteFile(outputFile, []byte(result), 0o600); err != nil {
 			logger.Error("writing output file", "err", err)
 			return cli.Exit("", 1)
 		}

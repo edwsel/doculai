@@ -62,7 +62,7 @@ LLMs consume best. Embed it in any Go service or call the CLI from your pipeline
 // Ingest a user-uploaded PDF into a RAG pipeline
 d := doculai.New(doculai.WithLogger(logger))
 
-markdown, err := d.Convert(file, doculai.Options{})
+markdown, err := d.Convert(file, converter.Options{})
 if err != nil {
     return err
 }
@@ -81,7 +81,7 @@ Give your AI agent a "read document" tool powered by `doculai`:
 // Agent tool handler
 func readDocument(input io.Reader) (string, error) {
     d := doculai.New()
-    return d.Convert(input, doculai.Options{})
+    return d.Convert(input, converter.Options{})
 }
 // The agent receives clean Markdown it can reason over
 ```
@@ -178,7 +178,6 @@ Examples:
 | `--vllm-prompt`                   | —         | Custom system prompt (overrides the built-in OCR prompt).                   |
 | `--with-reasoning`                | _off_     | Enable reasoning for reasoning-capable models (`o3`, `gpt-5`, …).           |
 | `--vllm-concurrency`              | `5`       | Max parallel VLLM page OCR requests.                                        |
-| `--image-dir`                     | —         | Directory for saving extracted images.                                      |
 | `-q, --quiet`                     | _off_     | Log only errors to stderr.                                                  |
 | `-v`                              | _off_     | Increase verbosity (repeatable: `-v` info, `-vv` debug, `-vvv` trace).      |
 
@@ -238,6 +237,11 @@ doculai -i docs/ -o output.md \
 The public API lives in [`pkg/doculai`](pkg/doculai). It is silent by default
 and fully configurable through functional options.
 
+> **Per-call options:** `Convert` / `ConvertWithType` accept a
+> [`converter.Options`](internal/converter/converter.go) value (defined under
+> `internal/converter`). Instance-level configuration is set through the
+> functional options below.
+
 ### Minimal
 
 ```go
@@ -246,6 +250,7 @@ package main
 import (
     "os"
 
+    "github.com/edwsel/doculai/internal/converter"
     "github.com/edwsel/doculai/pkg/doculai"
 )
 
@@ -258,7 +263,7 @@ func main() {
     }
     defer input.Close()
 
-    markdown, err := d.Convert(input, doculai.Options{})
+    markdown, err := d.Convert(input, converter.Options{})
     if err != nil {
         panic(err)
     }
@@ -283,7 +288,7 @@ d := doculai.New(doculai.WithLogger(logger))
 ### With an explicit input type
 
 ```go
-markdown, err := d.ConvertWithType(input, "application/pdf", doculai.Options{})
+markdown, err := d.ConvertWithType(input, "application/pdf", converter.Options{})
 ```
 
 ### Functional options
@@ -364,7 +369,7 @@ Supported local models include `llava`, `bakllava`, `llava-phi3`.
 ### Custom system prompt
 
 ```go
-opts := doculai.Options{
+opts := converter.Options{
     VLLMProvider: "openai",
     VLLMPrompt:   "Your custom OCR instruction…",
 }
@@ -471,7 +476,7 @@ Detect type (HTML / PDF / image)
   - Nesting resolved by horizontal X coordinate
 - **Tables** — detected by column alignment; requires ≥ 2 rows and ≥ 2 columns.
 - **Images** — embedded images plus full-page renders at DPI 200 (`RenderPageInDPI`)
-  for scans; emitted as files (via `--image-dir`) or base64.
+  for scans; encoded as base64 data URLs and sent to the VLLM for OCR.
 
 ## Testing
 

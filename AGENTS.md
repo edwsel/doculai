@@ -296,6 +296,23 @@ go test ./test/integration/...
 go test ./internal/converter/...
 ```
 
+### Линтинг (golangci-lint)
+
+Конфигурация: `.golangci.yml` (best practices: errcheck, govet, staticcheck,
+revive, gosec, gocritic, errorlint, exhaustive, prealloc и др.). Тестовые файлы
+ослаблены (gosec/dupl/gocritic/prealloc/errcheck/unparam/gocyclo отключены для
+`*_test.go` и `test/`).
+
+```bash
+# Полная проверка
+golangci-lint run ./...
+
+# Авто-исправление (форматирование, goimports, gofumpt)
+golangci-lint run --fix ./...
+```
+
+```
+
 ### Структура тестов
 
 ```

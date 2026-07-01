@@ -64,7 +64,7 @@ func (p *OllamaProvider) ExtractMarkdown(ctx context.Context, imageBase64 string
 		return "", fmt.Errorf("marshaling ollama request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.url, bytes.NewReader(jsonData))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.url, bytes.NewReader(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("creating ollama request: %w", err)
 	}

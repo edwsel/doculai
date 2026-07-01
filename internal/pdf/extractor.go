@@ -377,7 +377,7 @@ func extractPageImages(instance pdfium.Pdfium, doc references.FPDF_DOCUMENT, ind
 	if err != nil {
 		return nil, err
 	}
-	defer instance.FPDF_ClosePage(&requests.FPDF_ClosePage{Page: loadedPage.Page})
+	defer func() { _, _ = instance.FPDF_ClosePage(&requests.FPDF_ClosePage{Page: loadedPage.Page}) }()
 
 	page := requests.Page{ByReference: &loadedPage.Page}
 
@@ -386,7 +386,7 @@ func extractPageImages(instance pdfium.Pdfium, doc references.FPDF_DOCUMENT, ind
 		return nil, err
 	}
 
-	var images []ExtractedImage
+	images := make([]ExtractedImage, 0, countResp.Count)
 	for objIdx := 0; objIdx < countResp.Count; objIdx++ {
 		objResp, err := instance.FPDFPage_GetObject(&requests.FPDFPage_GetObject{Page: page, Index: objIdx})
 		if err != nil {
@@ -443,13 +443,14 @@ func normalizeToJPEG(data []byte) ([]byte, bool) {
 }
 
 // imageSize returns the pixel dimensions of an image object.
-func imageSize(instance pdfium.Pdfium, obj references.FPDF_PAGEOBJECT) (int, int) {
+func imageSize(instance pdfium.Pdfium, obj references.FPDF_PAGEOBJECT) (width, height int) {
 	resp, err := instance.FPDFImageObj_GetImagePixelSize(&requests.FPDFImageObj_GetImagePixelSize{
 		ImageObject: obj,
 	})
 	if err != nil {
 		return 0, 0
 	}
+	// #nosec G115 -- pixel dimensions fit safely in int on all supported platforms.
 	return int(resp.Width), int(resp.Height)
 }
 

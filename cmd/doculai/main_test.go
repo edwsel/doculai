@@ -18,7 +18,7 @@ import (
 
 func writePNG(t *testing.T, path string, w, h int) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
 	}
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
@@ -39,10 +39,10 @@ func writePNG(t *testing.T, path string, w, h int) {
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }
@@ -105,7 +105,7 @@ func TestConvertDirectory_MixedFiles(t *testing.T) {
 	}
 	d := doculai.New(doculai.WithLogger(opts.Logger))
 
-	result, err := convertDirectory(dir, d, opts, quietLogger(), "")
+	result, err := convertDirectory(dir, d, opts, quietLogger())
 	if err != nil {
 		t.Fatalf("convertDirectory() error = %v", err)
 	}
@@ -145,7 +145,7 @@ func TestConvertDirectory_SkipUnrecognized(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "data.bin"), "\x00\x01\x02") // unknown magic
 
 	d := doculai.New(doculai.WithLogger(quietLogger()))
-	_, err := convertDirectory(dir, d, converter.Options{Logger: quietLogger()}, quietLogger(), "")
+	_, err := convertDirectory(dir, d, converter.Options{Logger: quietLogger()}, quietLogger())
 	if err != nil {
 		t.Fatalf("convertDirectory() error = %v", err)
 	}
@@ -159,7 +159,7 @@ func TestConvertDirectory_FailFastOnOCRConfigMissing(t *testing.T) {
 
 	// No VLLM config: ImageConverter errors -> batch stops.
 	d := doculai.New(doculai.WithLogger(quietLogger()))
-	_, err := convertDirectory(dir, d, converter.Options{Logger: quietLogger()}, quietLogger(), "")
+	_, err := convertDirectory(dir, d, converter.Options{Logger: quietLogger()}, quietLogger())
 	if err == nil {
 		t.Fatal("expected fail-fast error for image without VLLM config, got nil")
 	}
@@ -172,7 +172,7 @@ func TestConvertOne_RoutesByMime(t *testing.T) {
 	d := doculai.New(doculai.WithLogger(quietLogger()))
 
 	t.Run("html", func(t *testing.T) {
-		out, err := convertOne([]byte("<p>hello</p>"), "text/html", converter.Options{Logger: quietLogger()}, d, "")
+		out, err := convertOne([]byte("<p>hello</p>"), "text/html", converter.Options{Logger: quietLogger()}, d)
 		if err != nil {
 			t.Fatalf("convertOne html: %v", err)
 		}
@@ -182,7 +182,7 @@ func TestConvertOne_RoutesByMime(t *testing.T) {
 	})
 
 	t.Run("unsupported mime errors", func(t *testing.T) {
-		_, err := convertOne([]byte("x"), "application/unknown", converter.Options{Logger: quietLogger()}, d, "")
+		_, err := convertOne([]byte("x"), "application/unknown", converter.Options{Logger: quietLogger()}, d)
 		if err == nil {
 			t.Fatal("expected error for unsupported MIME, got nil")
 		}

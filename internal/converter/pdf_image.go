@@ -106,7 +106,7 @@ func (c *PDFImageConverter) Convert(input io.Reader, opts Options) (string, erro
 	}
 
 	// Normalize and format images for VLLM
-	var formattedImages []*image.FormattedImage
+	formattedImages := make([]*image.FormattedImage, 0, len(images))
 	for i, img := range images {
 		if len(img.Data) == 0 {
 			continue
@@ -200,7 +200,6 @@ func (c *PDFImageConverter) ocrParallel(
 				markdown = md
 				return nil
 			}, b, notify)
-
 			if err != nil {
 				// If the parent context was canceled (fail-fast from a sibling
 				// failure), this page did not exhaust its own retries; log at

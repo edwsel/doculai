@@ -68,7 +68,7 @@ func (f *Formatter) FormatImage(input io.Reader, pageNum int) (*FormattedImage, 
 
 // FormatImages prepares multiple images for VLLM.
 func (f *Formatter) FormatImages(images []ImageInput) ([]*FormattedImage, error) {
-	var result []*FormattedImage
+	result := make([]*FormattedImage, 0, len(images))
 	for i, img := range images {
 		formatted, err := f.FormatImage(img.Reader, img.PageNum)
 		if err != nil {

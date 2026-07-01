@@ -105,8 +105,8 @@ func TestOCRParallel_ConcurrencyLimitRespected(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if max := atomic.LoadInt32(&maxInFlight); max > limit {
-		t.Errorf("max concurrency in flight = %d, want <= %d", max, limit)
+	if got := atomic.LoadInt32(&maxInFlight); got > limit {
+		t.Errorf("max concurrency in flight = %d, want <= %d", got, limit)
 	}
 	if got := atomic.LoadInt32(&calls); got != int32(len(imgs)) {
 		t.Errorf("extract calls = %d, want %d (every page should be processed)", got, len(imgs))
