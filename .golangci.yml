@@ -117,7 +117,8 @@ formatters:
 
   settings:
     goimports:
-      local-prefixes: github.com/edwsel/doculai
+      local-prefixes:
+        - github.com/edwsel/doculai
 
 issues:
   max-issues-per-linter: 0
@@ -126,4 +127,4 @@ issues:
 
 output:
   formats:
-    text:
+    text: {}
