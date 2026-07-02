@@ -1,102 +1,125 @@
+version: "2"
+
 run:
-  timeout: 5m
   go: "1.26"
   modules-download-mode: readonly
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
     - govet
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
-    - goimports
     - revive
     - gosec
     - gocritic
+    - misspell
     - unconvert
     - prealloc
     - nolintlint
     - unparam
+    - bodyclose
+    - rowserrcheck
     - sqlclosecheck
+    - noctx
+    - nilerr
     - errorlint
     - exhaustive
-    - gofumpt
     - makezero
+    - nakedret
+    - reassign
+    - thelper
     - tparallel
+    - usestdlibvars
+    - whitespace
     - gocyclo
+    - dupl
 
-linters-settings:
-  goimports:
-    local-prefixes: github.com/edwsel/doculai
-  revive:
-    severity: warning
+  settings:
+    revive:
+      severity: warning
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          disabled: true
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: var-declaration
+        - name: var-naming
+        - name: unreachable-code
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: useless-break
+        - name: waitgroup-by-value
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+    gocyclo:
+      min-complexity: 25
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    staticcheck:
+      checks: ["all"]
+    gosec:
+      excludes:
+        - G104
+        - G304
+    nolintlint:
+      require-explanation: false
+      require-specific: true
+    prealloc:
+      simple: true
+      for-loops: true
+
+  exclusions:
+    generated: lax
     rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: exported
-        disabled: true
-      - name: increment-decrement
-      - name: indent-error-flow
-      - name: range
-      - name: receiver-naming
-      - name: time-naming
-      - name: var-declaration
-      - name: var-naming
-      - name: unreachable-code
-      - name: redefines-builtin-id
-      - name: superfluous-else
-      - name: useless-break
-      - name: waitgroup-by-value
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-      - style
-    disabled-checks:
-      - hugeParam
-      - rangeValCopy
-  gocyclo:
-    min-complexity: 25
-  errorlint:
-    errorf: true
-    asserts: true
-    comparison: true
-  staticcheck:
-    checks: ["all"]
-  gosec:
-    excludes:
-      - G104
-      - G304
-  nolintlint:
-    require-explanation: false
-    require-specific: true
-  prealloc:
-    simple: true
-    for-loops: true
+      - path: _test\.go
+        linters:
+          - gosec
+          - dupl
+          - gocritic
+          - goconst
+          - prealloc
+          - errcheck
+          - unparam
+          - gocyclo
+      - path: test/
+        linters:
+          - gosec
+          - dupl
+          - gocritic
+          - prealloc
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gofumpt
+
+  settings:
+    goimports:
+      local-prefixes: github.com/edwsel/doculai
 
 issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-        - gocritic
-        - prealloc
-        - errcheck
-        - unparam
-        - gocyclo
-    - path: test/
-      linters:
-        - gosec
-        - gocritic
-        - prealloc
   max-issues-per-linter: 0
   max-same-issues: 0
   fix: false
@@ -104,4 +127,3 @@ issues:
 output:
   formats:
     text:
-  sort-results: true
