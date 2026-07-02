@@ -20,6 +20,14 @@ import (
 	"github.com/edwsel/doculai/pkg/doculai"
 )
 
+// Build-time variables. Overridden via ldflags (-X) by goreleaser; defaults
+// apply for `go build` / `go run` without ldflags.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 const longDescription = `Convert HTML or PDF files to Markdown.
 
 Examples:
@@ -61,6 +69,7 @@ func main() {
 
 	cmd := &cli.Command{
 		Name:                   "doculai",
+		Version:                fmt.Sprintf("%s (commit %s, built %s)", version, commit, date),
 		Usage:                  "Convert HTML or PDF files to Markdown.",
 		Description:            longDescription,
 		UseShortOptionHandling: true,

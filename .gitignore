@@ -1,6 +1,7 @@
 # Binaries
 /doculai
 /bin/
+/dist/
 *.exe
 *.exe~
 *.dll
