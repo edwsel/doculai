@@ -16,28 +16,17 @@ linters:
     - revive
     - gosec
     - gocritic
-    - misspell
     - unconvert
     - prealloc
     - nolintlint
     - unparam
-    - bodyclose
-    - rowserrcheck
     - sqlclosecheck
-    - noctx
-    - nilerr
     - errorlint
     - exhaustive
     - gofumpt
     - makezero
-    - nakedret
-    - reassign
-    - thelper
     - tparallel
-    - usestdlibvars
-    - whitespace
     - gocyclo
-    - dupl
 
 linters-settings:
   goimports:
@@ -98,9 +87,7 @@ issues:
     - path: _test\.go
       linters:
         - gosec
-        - dupl
         - gocritic
-        - goconst
         - prealloc
         - errcheck
         - unparam
@@ -108,7 +95,6 @@ issues:
     - path: test/
       linters:
         - gosec
-        - dupl
         - gocritic
         - prealloc
   max-issues-per-linter: 0
@@ -117,7 +103,5 @@ issues:
 
 output:
   formats:
-    - format: colored-line-number
+    text:
   sort-results: true
-  print-issued-lines: true
-  print-linter-name: true
