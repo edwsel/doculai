@@ -41,4 +41,7 @@ changelog:
 release:
   draft: false
   prerelease: auto
+  # On re-runs for the same tag, delete any asset that already exists on the
+  # release (422 already_exists) and re-upload it. Makes releases idempotent.
+  replace_existing_artifacts: true
   name_template: "{{ .Tag }}"
