@@ -256,7 +256,7 @@ func run(_ context.Context, cfg runConfig) error {
 			logger.Error("opening input file", "err", err)
 			return cli.Exit("", 1)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		input = f
 
 		// Detect MIME type from file extension if auto.

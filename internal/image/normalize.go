@@ -1,3 +1,5 @@
+// Package image provides image normalization and formatting helpers used
+// before sending images to a VLLM OCR provider.
 package image
 
 import (

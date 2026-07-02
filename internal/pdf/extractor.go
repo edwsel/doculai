@@ -1,3 +1,5 @@
+// Package pdf provides helpers for inspecting PDF documents and extracting
+// text and images from them via go-pdfium.
 package pdf
 
 import (

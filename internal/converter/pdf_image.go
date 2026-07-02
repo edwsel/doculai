@@ -240,19 +240,19 @@ func formatWithoutOCR(pageCount int, dimensions []pdf.PageDimension) string {
 	var sb strings.Builder
 
 	sb.WriteString("# PDF Document (Image-based)\n\n")
-	sb.WriteString(fmt.Sprintf("**Pages:** %d\n\n", pageCount))
+	fmt.Fprintf(&sb, "**Pages:** %d\n\n", pageCount)
 
 	if len(dimensions) > 0 {
 		sb.WriteString("## Page Dimensions\n\n")
 		for _, dim := range dimensions {
-			sb.WriteString(fmt.Sprintf("- Page %d: %.0f x %.0f points\n", dim.PageNum, dim.Width, dim.Height))
+			fmt.Fprintf(&sb, "- Page %d: %.0f x %.0f points\n", dim.PageNum, dim.Width, dim.Height)
 		}
 		sb.WriteString("\n")
 	}
 
 	sb.WriteString("## Content\n\n")
 	for i := 1; i <= pageCount; i++ {
-		sb.WriteString(fmt.Sprintf("[Image: page %d]\n\n", i))
+		fmt.Fprintf(&sb, "[Image: page %d]\n\n", i)
 	}
 
 	sb.WriteString("\n---\n\n")

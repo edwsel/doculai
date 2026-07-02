@@ -1,3 +1,4 @@
+// Package doculai exposes the public API for converting documents to Markdown.
 package doculai
 
 import (

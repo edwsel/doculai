@@ -1,3 +1,5 @@
+// Package vllm implements an OpenAI-compatible and Ollama client for sending
+// images to vision language models for OCR.
 package vllm
 
 import "context"

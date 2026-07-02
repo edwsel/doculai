@@ -1,3 +1,5 @@
+// Package structure detects document structure (headings, lists, tables)
+// from extracted PDF text elements and formats it into Markdown.
 package structure
 
 import (
@@ -468,28 +470,28 @@ func (f *Formatter) ToMarkdown(elements []StructuredElement) string {
 	for _, elem := range elements {
 		switch elem.Type {
 		case ElementHeading1:
-			sb.WriteString(fmt.Sprintf("# %s\n\n", elem.Text))
+			fmt.Fprintf(&sb, "# %s\n\n", elem.Text)
 		case ElementHeading2:
-			sb.WriteString(fmt.Sprintf("## %s\n\n", elem.Text))
+			fmt.Fprintf(&sb, "## %s\n\n", elem.Text)
 		case ElementHeading3:
-			sb.WriteString(fmt.Sprintf("### %s\n\n", elem.Text))
+			fmt.Fprintf(&sb, "### %s\n\n", elem.Text)
 		case ElementParagraph:
-			sb.WriteString(fmt.Sprintf("%s\n\n", elem.Text))
+			fmt.Fprintf(&sb, "%s\n\n", elem.Text)
 		case ElementUnorderedList:
 			for _, item := range elem.Items {
-				sb.WriteString(fmt.Sprintf("- %s\n", item))
+				fmt.Fprintf(&sb, "- %s\n", item)
 			}
 			sb.WriteString("\n")
 		case ElementOrderedList:
 			for i, item := range elem.Items {
-				sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, item))
+				fmt.Fprintf(&sb, "%d. %s\n", i+1, item)
 			}
 			sb.WriteString("\n")
 		case ElementTable:
 			sb.WriteString(f.formatTable(elem.Table))
 		case ElementImage:
 			if elem.Image != nil {
-				sb.WriteString(fmt.Sprintf("![%s](%s)\n\n", elem.Image.Alt, elem.Image.Path))
+				fmt.Fprintf(&sb, "![%s](%s)\n\n", elem.Image.Alt, elem.Image.Path)
 			}
 		}
 	}
@@ -542,15 +544,16 @@ func (f *Formatter) formatTable(table [][]string) string {
 
 	// Data rows
 	for i := 1; i < len(table); i++ {
+		row := table[i]
 		sb.WriteString("| ")
-		for j, cell := range table[i] {
+		for j, cell := range row {
 			if j > 0 {
 				sb.WriteString(" | ")
 			}
 			sb.WriteString(cell)
 		}
 		// Pad empty cells
-		for j := len(table[i]); j < maxCols; j++ {
+		for j := len(row); j < maxCols; j++ {
 			sb.WriteString(" | ")
 		}
 		sb.WriteString(" |\n")

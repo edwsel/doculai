@@ -1,3 +1,5 @@
+// Package converter implements format-specific converters that turn input
+// documents (HTML, PDF, images) into Markdown.
 package converter
 
 import (

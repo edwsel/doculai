@@ -1,3 +1,4 @@
+// Package mock provides a mock VLLM HTTP server for tests.
 package mock
 
 import (
